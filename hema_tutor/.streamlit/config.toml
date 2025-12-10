@@ -1,0 +1,10 @@
+[server]
+# Limite de upload: 500MB
+maxUploadSize = 500
+
+# Tamanho máximo de mensagem
+maxMessageSize = 500
+
+[browser]
+# Não abrir automaticamente o navegador
+gatherUsageStats = false
