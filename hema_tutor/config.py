@@ -58,8 +58,19 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
 # Opções: "faiss" ou "chroma"
 VECTORSTORE_TYPE: Literal["faiss", "chroma"] = os.getenv("VECTORSTORE_TYPE", "faiss")
 
-# Modelo de embeddings (OpenAI)
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+# ============================================
+# CONFIGURAÇÃO DE EMBEDDINGS
+# ============================================
+# Provider de embeddings: "openai" ou "local" (HuggingFace - GRATUITO!)
+EMBEDDING_PROVIDER: Literal["openai", "local"] = os.getenv("EMBEDDING_PROVIDER", "local")
+
+# Modelo de embeddings OpenAI (usado se EMBEDDING_PROVIDER=openai)
+EMBEDDING_MODEL_OPENAI = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+
+# Modelo de embeddings local HuggingFace (usado se EMBEDDING_PROVIDER=local)
+# all-MiniLM-L6-v2: rápido e leve (~90MB)
+# all-mpnet-base-v2: melhor qualidade (~420MB)
+EMBEDDING_MODEL_LOCAL = os.getenv("EMBEDDING_MODEL_LOCAL", "all-MiniLM-L6-v2")
 
 # ============================================
 # CONFIGURAÇÃO DE CHUNKING
@@ -135,11 +146,17 @@ def get_vectorstore_config() -> dict:
     Returns:
         dict: Configuração contendo type, persist_directory, embedding_model
     """
+    embedding_model = EMBEDDING_MODEL_LOCAL if EMBEDDING_PROVIDER == "local" else EMBEDDING_MODEL_OPENAI
     return {
         "type": VECTORSTORE_TYPE,
         "persist_directory": str(VECTORSTORES_DIR),
-        "embedding_model": EMBEDDING_MODEL,
+        "embedding_provider": EMBEDDING_PROVIDER,
+        "embedding_model": embedding_model,
     }
+
+
+# Variável de compatibilidade
+EMBEDDING_MODEL = EMBEDDING_MODEL_LOCAL if EMBEDDING_PROVIDER == "local" else EMBEDDING_MODEL_OPENAI
 
 
 def validate_config() -> tuple[bool, list[str]]:
@@ -151,15 +168,16 @@ def validate_config() -> tuple[bool, list[str]]:
     """
     errors = []
 
+    # Validação do LLM
     if LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
         errors.append("OPENAI_API_KEY não configurada no .env")
 
     if LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY:
         errors.append("ANTHROPIC_API_KEY não configurada no .env")
 
-    # OpenAI API key é necessária para embeddings mesmo usando Anthropic
-    if not OPENAI_API_KEY:
-        errors.append("OPENAI_API_KEY necessária para embeddings (mesmo usando Claude)")
+    # Validação dos embeddings (só precisa de OpenAI key se usar embeddings OpenAI)
+    if EMBEDDING_PROVIDER == "openai" and not OPENAI_API_KEY:
+        errors.append("OPENAI_API_KEY necessária para embeddings OpenAI")
 
     return len(errors) == 0, errors
 

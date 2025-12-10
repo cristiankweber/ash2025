@@ -38,6 +38,8 @@ from config import (
     RETRIEVER_K,
     VECTORSTORE_TYPE,
     EMBEDDING_MODEL,
+    EMBEDDING_PROVIDER,
+    EMBEDDING_MODEL_LOCAL,
     LLM_PROVIDER,
     OPENAI_MODEL,
     ANTHROPIC_MODEL,
@@ -102,10 +104,8 @@ class RAGEngine:
 
     def __init__(self):
         """Inicializa o RAG Engine com as configurações do config.py."""
-        self.embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            openai_api_key=OPENAI_API_KEY
-        )
+        # Inicializa embeddings baseado no provider
+        self.embeddings = self._initialize_embeddings()
         self.vectorstore: Optional[VectorStore] = None
         self.current_pdf_hash: Optional[str] = None
         self.tracks: List[Track] = []
@@ -120,6 +120,28 @@ class RAGEngine:
             length_function=len,
             separators=["\n\n", "\n", ". ", " ", ""]
         )
+
+    def _initialize_embeddings(self):
+        """
+        Inicializa o modelo de embeddings baseado na configuração.
+
+        Returns:
+            OpenAIEmbeddings ou HuggingFaceEmbeddings
+        """
+        if EMBEDDING_PROVIDER == "local":
+            # Embeddings locais via HuggingFace (GRATUITO!)
+            from langchain_huggingface import HuggingFaceEmbeddings
+            return HuggingFaceEmbeddings(
+                model_name=EMBEDDING_MODEL_LOCAL,
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+        else:
+            # Embeddings OpenAI
+            return OpenAIEmbeddings(
+                model=EMBEDDING_MODEL,
+                openai_api_key=OPENAI_API_KEY
+            )
 
     def _initialize_llm(self):
         """
