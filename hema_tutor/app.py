@@ -162,23 +162,42 @@ def render_sidebar():
     # --- SEÇÃO 1: Upload de PDF ---
     st.sidebar.markdown("### 📄 Material de Estudo")
 
+    # Opção 1: Upload de arquivo
     uploaded_file = st.sidebar.file_uploader(
         "Faça upload do PDF (ASH-SAP)",
         type=["pdf"],
         help="Envie o PDF do ASH-SAP ou outro material de hematologia"
     )
 
+    # Opção 2: Caminho local (útil para Codespaces/servidores)
+    with st.sidebar.expander("📁 Ou informe o caminho do arquivo"):
+        pdf_path_input = st.text_input(
+            "Caminho do PDF:",
+            placeholder="/workspaces/repo/arquivo.pdf",
+            help="Use isso se o upload não funcionar (ex: Codespaces)"
+        )
+        if pdf_path_input and st.button("📂 Carregar do caminho"):
+            if os.path.exists(pdf_path_input):
+                st.session_state.pdf_local_path = pdf_path_input
+                st.sidebar.success(f"✓ Arquivo encontrado!")
+            else:
+                st.sidebar.error("❌ Arquivo não encontrado!")
+
+    # Determina qual arquivo usar
+    file_path = None
     if uploaded_file is not None:
-        # Salva o arquivo
+        # Salva o arquivo uploadado
         file_path = UPLOADS_DIR / uploaded_file.name
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
-
         st.sidebar.success(f"✓ Arquivo: {uploaded_file.name}")
+    elif hasattr(st.session_state, 'pdf_local_path') and st.session_state.pdf_local_path:
+        file_path = Path(st.session_state.pdf_local_path)
+        st.sidebar.success(f"✓ Arquivo: {file_path.name}")
 
-        # Botão de processamento
-        if st.sidebar.button("🔄 Processar Material", type="primary", use_container_width=True):
-            process_pdf(str(file_path))
+    # Botão de processamento
+    if file_path and st.sidebar.button("🔄 Processar Material", type="primary", use_container_width=True):
+        process_pdf(str(file_path))
 
     # Status do processamento
     if st.session_state.pdf_processed:

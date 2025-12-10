@@ -1,10 +1,12 @@
 [server]
 # Limite de upload: 500MB
 maxUploadSize = 500
-
-# Tamanho máximo de mensagem
 maxMessageSize = 500
 
+# Configuração para Codespaces/Cloud
+enableCORS = false
+enableXsrfProtection = false
+headless = true
+
 [browser]
-# Não abrir automaticamente o navegador
 gatherUsageStats = false
