@@ -1,67 +1,70 @@
-# 🩸 ASH-SAP Study Platform
+# 🩸 ASH-SAP Study Platform (Modo Offline)
 
-Plataforma adaptativa de estudo em Hematologia baseada no ASH-SAP 9th Edition (2025).
+Plataforma de estudo em Hematologia que importa e organiza suas lições do Claude.
 
-## Funcionalidades
+**100% OFFLINE - NÃO precisa de API key!**
 
-- **9 Trilhas de Aprendizado** organizadas por tema
-- **Geração de Lições** via Claude AI
-- **Quiz Interativo** com correção automática
-- **Acompanhamento de Progresso** completo
-- **Importação de Lições** de conversas anteriores
-- **Sistema de Revisão Espaçada**
+## Como Funciona
 
-## Trilhas Disponíveis
-
-1. Hemostasia e Trombose
-2. Anemias
-3. Hemoglobinopatias
-4. Plaquetas e Distúrbios Plaquetários
-5. Neoplasias Mieloides
-6. Neoplasias Linfoides
-7. Transplante e Terapia Celular
-8. Medicina Transfusional
-9. Hematologia Consultiva e Especial
+1. Você estuda com o Claude (claude.ai)
+2. Copia o JSON das lições geradas
+3. Importa no app
+4. Revisa, acompanha progresso e organiza seu estudo
 
 ## Instalação
 
 ```bash
-# Clone o repositório
-git clone <repo-url>
 cd ash_study
-
-# Instale as dependências
 pip install -r requirements.txt
-
-# Configure a API key
-cp .env.example .env
-# Edite .env com sua ANTHROPIC_API_KEY
-
-# Execute
 streamlit run app.py
 ```
 
-## Uso
+Pronto! Não precisa configurar nada.
 
-1. **Dashboard**: Visão geral do progresso
-2. **Trilhas**: Navegue pelas trilhas e selecione capítulos
-3. **Estudar**: Gere lições e faça quizzes
-4. **Progresso**: Acompanhe seu histórico
-5. **Importar**: Importe lições de conversas anteriores
+## Funcionalidades
 
-## Importar Lições Anteriores
+- **📥 Importar Lições** - Cole o JSON das suas conversas
+- **📚 9 Trilhas** - Organizadas por tema do ASH-SAP
+- **📖 Ver Lições** - Revise objetivos, tópicos e pontos-chave
+- **📊 Progresso** - Acompanhe seu avanço
+- **📤 Exportar** - Faça backup do seu progresso
 
-Se você já estudou com o Claude, pode importar suas lições:
+## Formato do JSON
 
-1. Vá em "📥 Importar Lição"
-2. Cole o JSON da lição (formato do HemaTutor)
-3. Clique em "Importar"
+O app aceita o JSON no formato que o Claude gera:
 
-## Requisitos
+```json
+{
+  "licoes_concluidas": [
+    {
+      "capitulo_ash_sap": 1,
+      "titulo": "Manejo Perioperatório",
+      "objetivos_aprendizado": ["..."],
+      "topicos_abordados": [...],
+      "pontos_chave_memorizacao": ["..."],
+      "avaliacao": {
+        "total_questoes": 7,
+        "questoes_corretas": 5,
+        "taxa_acerto": 71.4
+      }
+    }
+  ]
+}
+```
 
-- Python 3.9+
-- Anthropic API Key
+## Trilhas Disponíveis
 
-## Licença
+1. Hemostasia e Trombose (Cap. 15-22)
+2. Anemias (Cap. 6-9, 12-14, 35, 39)
+3. Hemoglobinopatias (Cap. 10-11)
+4. Plaquetas (Cap. 23-26)
+5. Neoplasias Mieloides (Cap. 34, 36-41)
+6. Neoplasias Linfoides (Cap. 42-49)
+7. Transplante (Cap. 30-33)
+8. Medicina Transfusional (Cap. 27-29)
+9. Hematologia Consultiva (Cap. 1-5)
 
-Projeto educacional.
+## Dica de Uso
+
+Quando estudar no Claude, peça para ele gerar as lições neste formato JSON.
+Assim você pode importar facilmente no app!

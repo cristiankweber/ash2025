@@ -1,14 +1,10 @@
 # ============================================
-# ASH-SAP Study Platform - Dependências
+# ASH-SAP Study Platform - Modo Offline
 # ============================================
+# Dependências mínimas - NÃO precisa de API key!
 
 # Interface
 streamlit==1.40.1
-
-# LLM
-anthropic==0.39.0
-langchain==0.3.9
-langchain-anthropic==0.3.0
 
 # Dados
 pydantic==2.10.2

@@ -1,13 +1,16 @@
 """
-app.py - Interface Streamlit da ASH-SAP Study Platform
+app.py - Interface Streamlit da ASH-SAP Study Platform (Modo Offline)
+
+Funciona 100% offline - apenas importa e navega lições do Claude.
+NÃO requer API key.
 """
 import streamlit as st
 import json
 from datetime import datetime
 
-from config import validate_config, DATA_DIR
+from config import DATA_DIR
 from study_engine import get_study_engine
-from models import LessonStatus, Licao
+from models import LessonStatus
 from prompts import CHAPTER_INFO
 
 # ============================================
@@ -50,25 +53,27 @@ st.markdown("""
         font-weight: bold;
     }
     .trilha-card {
+        background: #f8f9fa;
         border: 1px solid #ddd;
         border-radius: 10px;
         padding: 1rem;
         margin: 0.5rem 0;
-        transition: all 0.3s;
     }
-    .trilha-card:hover {
-        border-color: #8B0000;
-        box-shadow: 0 2px 8px rgba(139, 0, 0, 0.2);
-    }
-    .question-box {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
+    .lesson-card {
+        background: white;
         border-left: 4px solid #8B0000;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 0 10px 10px 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .points-box {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 10px;
+        padding: 1rem;
         margin: 1rem 0;
     }
-    .correct { color: #28a745; }
-    .incorrect { color: #dc3545; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -81,10 +86,7 @@ def init_session_state():
         "page": "dashboard",
         "current_trilha": None,
         "current_licao": None,
-        "quiz_questions": [],
-        "quiz_answers": {},
-        "quiz_submitted": False,
-        "show_lesson_content": False,
+        "viewing_licao_id": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -96,7 +98,7 @@ def init_session_state():
 # ============================================
 def render_sidebar():
     st.sidebar.markdown("## 🩸 ASH-SAP Study")
-    st.sidebar.markdown("*Plataforma de Estudo Adaptativa*")
+    st.sidebar.markdown("*Modo Offline*")
     st.sidebar.markdown("---")
 
     # Navegação
@@ -106,31 +108,37 @@ def render_sidebar():
         st.session_state.page = "dashboard"
         st.rerun()
 
-    if st.sidebar.button("📚 Trilhas de Estudo", use_container_width=True):
+    if st.sidebar.button("📚 Trilhas", use_container_width=True):
         st.session_state.page = "trilhas"
         st.rerun()
 
-    if st.sidebar.button("📊 Meu Progresso", use_container_width=True):
-        st.session_state.page = "progresso"
+    if st.sidebar.button("📖 Minhas Lições", use_container_width=True):
+        st.session_state.page = "licoes"
         st.rerun()
 
-    if st.sidebar.button("📥 Importar Lição", use_container_width=True):
+    if st.sidebar.button("📥 Importar JSON", use_container_width=True, type="primary"):
         st.session_state.page = "importar"
+        st.rerun()
+
+    if st.sidebar.button("📤 Exportar Progresso", use_container_width=True):
+        st.session_state.page = "exportar"
         st.rerun()
 
     st.sidebar.markdown("---")
 
-    # Estatísticas rápidas
-    try:
-        engine = get_study_engine()
-        stats = engine.get_estatisticas()
+    # Estatísticas
+    engine = get_study_engine()
+    stats = engine.get_estatisticas()
 
-        st.sidebar.markdown("### 📈 Resumo")
-        st.sidebar.metric("Lições Concluídas", f"{stats['licoes_concluidas']}/{stats['total_licoes']}")
-        st.sidebar.progress(stats['percentual'] / 100)
+    st.sidebar.markdown("### 📊 Resumo")
+    st.sidebar.metric("Lições Importadas", f"{stats['licoes_concluidas']}/{stats['total_licoes']}")
+    st.sidebar.progress(stats['percentual'] / 100 if stats['percentual'] > 0 else 0)
+
+    if stats['questoes_respondidas'] > 0:
         st.sidebar.metric("Taxa de Acerto", f"{stats['taxa_acerto']}%")
-    except Exception as e:
-        st.sidebar.warning("Configure a API key")
+
+    st.sidebar.markdown("---")
+    st.sidebar.info("💡 **Dica:** Importe suas lições do Claude para começar!")
 
 
 # ============================================
@@ -138,19 +146,11 @@ def render_sidebar():
 # ============================================
 def render_dashboard():
     st.markdown('<h1 class="main-header">🩸 ASH-SAP Study Platform</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Plataforma Adaptativa de Estudo em Hematologia</p>', unsafe_allow_html=True)
-
-    # Validação
-    is_valid, errors = validate_config()
-    if not is_valid:
-        st.error("⚠️ **Configuração necessária**")
-        for e in errors:
-            st.warning(f"• {e}")
-        st.info("Configure o arquivo `.env` com sua `ANTHROPIC_API_KEY`")
-        return
+    st.markdown('<p class="sub-header">Plataforma de Estudo em Hematologia - Modo Offline</p>', unsafe_allow_html=True)
 
     engine = get_study_engine()
     stats = engine.get_estatisticas()
+    licoes = engine.get_licoes_concluidas()
 
     # Cards de estatísticas
     col1, col2, col3, col4 = st.columns(4)
@@ -159,7 +159,7 @@ def render_dashboard():
         st.markdown(f"""
         <div class="stat-box">
             <div class="stat-number">{stats['licoes_concluidas']}</div>
-            <div>Lições Concluídas</div>
+            <div>Lições Importadas</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -167,7 +167,7 @@ def render_dashboard():
         st.markdown(f"""
         <div class="stat-box">
             <div class="stat-number">{stats['percentual']}%</div>
-            <div>Progresso Geral</div>
+            <div>Progresso</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -183,45 +183,53 @@ def render_dashboard():
         st.markdown(f"""
         <div class="stat-box">
             <div class="stat-number">{stats['questoes_respondidas']}</div>
-            <div>Questões Respondidas</div>
+            <div>Questões</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # Ação rápida
-    st.markdown("### 🚀 Começar a Estudar")
-
+    # Ações principais
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("#### Continuar onde parou")
-        prog = engine.get_progresso()
-        if prog.trilha_atual:
-            trilha = engine.get_trilha(prog.trilha_atual)
-            if trilha:
-                st.info(f"**Trilha atual:** {trilha.nome}")
-                if st.button("▶️ Continuar Estudo", type="primary"):
-                    st.session_state.current_trilha = prog.trilha_atual
-                    st.session_state.page = "estudar"
-                    st.rerun()
-        else:
-            st.info("Selecione uma trilha para começar!")
+        st.markdown("### 📥 Importar Lições")
+        st.markdown("""
+        Importe lições das suas conversas com o Claude.
+        Cole o JSON completo ou lições individuais.
+        """)
+        if st.button("📥 Ir para Importação", type="primary", use_container_width=True):
+            st.session_state.page = "importar"
+            st.rerun()
 
     with col2:
-        st.markdown("#### Escolher trilha")
-        trilhas = engine.get_trilhas()
-        trilha_options = {t.nome: t.id for t in trilhas}
-        selected = st.selectbox("Selecione uma trilha:", list(trilha_options.keys()))
-        if st.button("📚 Ir para Trilha"):
-            st.session_state.current_trilha = trilha_options[selected]
-            st.session_state.page = "estudar"
-            st.rerun()
+        st.markdown("### 📖 Ver Lições")
+        if licoes:
+            st.markdown(f"Você tem **{len(licoes)} lições** importadas.")
+            if st.button("📖 Ver Minhas Lições", use_container_width=True):
+                st.session_state.page = "licoes"
+                st.rerun()
+        else:
+            st.info("Nenhuma lição importada ainda.")
+
+    # Lições recentes
+    if licoes:
+        st.markdown("---")
+        st.markdown("### 📚 Lições Recentes")
+
+        for licao in licoes[-3:]:
+            taxa = licao.avaliacao.taxa_acerto if licao.avaliacao else 0
+            st.markdown(f"""
+            <div class="lesson-card">
+                <strong>Cap. {licao.capitulo_ash_sap}: {licao.titulo}</strong><br>
+                <small>Taxa de acerto: {taxa:.0f}%</small>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 def render_trilhas():
     st.markdown("## 📚 Trilhas de Estudo")
-    st.markdown("Selecione uma trilha para ver os capítulos disponíveis.")
+    st.markdown("Veja o progresso em cada trilha do ASH-SAP.")
     st.markdown("---")
 
     engine = get_study_engine()
@@ -232,238 +240,207 @@ def render_trilhas():
         total_caps = len(trilha.capitulos)
         progresso = len(caps_concluidos) / total_caps if total_caps > 0 else 0
 
-        with st.expander(f"**{trilha.nome}** ({len(caps_concluidos)}/{total_caps} capítulos)"):
+        with st.expander(f"**{trilha.nome}** ({len(caps_concluidos)}/{total_caps} capítulos)", expanded=False):
+            st.markdown(f"*{trilha.descricao}*")
             st.progress(progresso)
 
             # Lista de capítulos
             for cap in trilha.capitulos:
                 info = CHAPTER_INFO.get(cap, {"titulo": f"Capítulo {cap}"})
-                status = "✅" if cap in caps_concluidos else "📖"
-                st.markdown(f"{status} **Cap. {cap}:** {info['titulo']}")
-
-            if st.button(f"Estudar {trilha.nome}", key=f"btn_{trilha.id}"):
-                st.session_state.current_trilha = trilha.id
-                st.session_state.page = "estudar"
-                st.rerun()
-
-
-def render_estudar():
-    trilha_id = st.session_state.current_trilha
-    if not trilha_id:
-        st.warning("Selecione uma trilha primeiro!")
-        return
-
-    engine = get_study_engine()
-    trilha = engine.get_trilha(trilha_id)
-
-    if not trilha:
-        st.error("Trilha não encontrada!")
-        return
-
-    st.markdown(f"## 📖 {trilha.nome}")
-
-    # Seleciona próximo capítulo
-    caps_concluidos = engine.get_capitulos_concluidos(trilha_id)
-    caps_pendentes = [c for c in trilha.capitulos if c not in caps_concluidos]
-
-    if not caps_pendentes:
-        st.success("🎉 Parabéns! Você concluiu todos os capítulos desta trilha!")
-        if st.button("← Voltar às Trilhas"):
-            st.session_state.page = "trilhas"
-            st.rerun()
-        return
-
-    # Seleção de capítulo
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        cap_options = {f"Cap. {c}: {CHAPTER_INFO.get(c, {}).get('titulo', '')}": c for c in caps_pendentes}
-        selected_cap_name = st.selectbox("Selecione o capítulo:", list(cap_options.keys()))
-        selected_cap = cap_options[selected_cap_name]
-
-    with col2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        gerar_btn = st.button("📝 Gerar Lição", type="primary")
-
-    # Gera lição
-    if gerar_btn or st.session_state.current_licao:
-        if gerar_btn:
-            with st.spinner("🤖 Gerando lição com Claude..."):
-                licao = engine.gerar_licao(trilha_id, selected_cap)
-                st.session_state.current_licao = licao
-                st.session_state.show_lesson_content = True
-                st.session_state.quiz_submitted = False
-                st.session_state.quiz_answers = {}
-
-        licao = st.session_state.current_licao
-
-        if licao and st.session_state.show_lesson_content:
-            st.markdown("---")
-            st.markdown(f"### 📚 {licao.titulo}")
-
-            # Conteúdo da lição
-            with st.expander("📖 Ver Conteúdo da Lição", expanded=True):
-                st.markdown(licao.conteudo)
-
-            st.markdown("---")
-
-            # Quiz
-            if not st.session_state.quiz_questions:
-                if st.button("📝 Gerar Quiz", type="primary"):
-                    with st.spinner("Gerando questões..."):
-                        questions = engine.gerar_quiz(licao)
-                        st.session_state.quiz_questions = questions
-                        st.rerun()
-            else:
-                render_quiz(engine, licao)
+                if cap in caps_concluidos:
+                    licao = engine.get_licao_by_capitulo(cap)
+                    taxa = licao.avaliacao.taxa_acerto if licao and licao.avaliacao else 0
+                    st.markdown(f"✅ **Cap. {cap}:** {info['titulo']} ({taxa:.0f}%)")
+                else:
+                    st.markdown(f"⬜ **Cap. {cap}:** {info['titulo']}")
 
 
-def render_quiz(engine, licao):
-    st.markdown("### 📝 Quiz de Avaliação")
-
-    questions = st.session_state.quiz_questions
-
-    if not st.session_state.quiz_submitted:
-        for q in questions:
-            st.markdown(f"""
-            <div class="question-box">
-                <strong>Questão {q.numero}:</strong> {q.tema}<br>
-                <em>{q.cenario}</em>
-            </div>
-            """, unsafe_allow_html=True)
-
-            answer = st.radio(
-                f"Selecione a resposta:",
-                options=list(q.opcoes.keys()),
-                format_func=lambda x, q=q: f"{x}) {q.opcoes[x]}",
-                key=f"q_{q.numero}",
-                index=None
-            )
-
-            if answer:
-                st.session_state.quiz_answers[q.numero] = answer
-
-        if len(st.session_state.quiz_answers) == len(questions):
-            if st.button("✅ Corrigir Quiz", type="primary"):
-                avaliacao = engine.avaliar_quiz(
-                    licao,
-                    questions,
-                    st.session_state.quiz_answers
-                )
-                licao.avaliacao = avaliacao
-                st.session_state.quiz_submitted = True
-                st.rerun()
-        else:
-            st.warning(f"Responda todas as {len(questions)} questões para corrigir.")
-
-    else:
-        # Mostra resultados
-        avaliacao = licao.avaliacao
-
-        if avaliacao.taxa_acerto >= 85:
-            st.success(f"🎉 **Excelente!** Você acertou {avaliacao.questoes_corretas}/{avaliacao.total_questoes} ({avaliacao.taxa_acerto:.0f}%)")
-        elif avaliacao.taxa_acerto >= 70:
-            st.warning(f"📚 **Bom trabalho!** Você acertou {avaliacao.questoes_corretas}/{avaliacao.total_questoes} ({avaliacao.taxa_acerto:.0f}%)")
-        else:
-            st.error(f"📖 **Revise o conteúdo!** Você acertou {avaliacao.questoes_corretas}/{avaliacao.total_questoes} ({avaliacao.taxa_acerto:.0f}%)")
-
-        # Detalhes
-        with st.expander("📋 Ver Detalhes das Respostas"):
-            for q in avaliacao.questoes:
-                icon = "✅" if q.resultado == "correta" else "❌"
-                st.markdown(f"**{icon} Questão {q.numero}:** {q.tema}")
-                st.markdown(f"Sua resposta: **{q.resposta_aluno}** | Correta: **{q.resposta_correta}**")
-                st.markdown(f"_{q.explicacao}_")
-                st.markdown("---")
-
-        # Ações
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✅ Concluir e Avançar"):
-                engine.concluir_licao(licao)
-                st.session_state.current_licao = None
-                st.session_state.quiz_questions = []
-                st.session_state.quiz_submitted = False
-                st.session_state.quiz_answers = {}
-                st.success("Lição concluída!")
-                st.rerun()
-
-        with col2:
-            if st.button("🔄 Refazer Quiz"):
-                st.session_state.quiz_submitted = False
-                st.session_state.quiz_answers = {}
-                st.rerun()
-
-
-def render_progresso():
-    st.markdown("## 📊 Meu Progresso")
-
-    engine = get_study_engine()
-    stats = engine.get_estatisticas()
-    licoes = engine.get_licoes_concluidas()
-
-    # Métricas
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Lições Concluídas", stats['licoes_concluidas'])
-    col2.metric("Questões Respondidas", stats['questoes_respondidas'])
-    col3.metric("Taxa de Acerto", f"{stats['taxa_acerto']}%")
-
+def render_licoes():
+    st.markdown("## 📖 Minhas Lições")
+    st.markdown("Lições importadas das suas conversas com o Claude.")
     st.markdown("---")
 
-    # Histórico
-    st.markdown("### 📜 Histórico de Lições")
+    engine = get_study_engine()
+    licoes = engine.get_licoes_concluidas()
 
     if not licoes:
-        st.info("Nenhuma lição concluída ainda. Comece a estudar!")
-    else:
-        for licao in reversed(licoes):
-            taxa = licao.avaliacao.taxa_acerto if licao.avaliacao else 0
-            icon = "🌟" if taxa >= 85 else "📗" if taxa >= 70 else "📙"
+        st.info("📭 Nenhuma lição importada ainda.")
+        st.markdown("Vá em **📥 Importar JSON** para adicionar suas lições.")
+        return
 
-            with st.expander(f"{icon} {licao.titulo} - {taxa:.0f}%"):
-                st.markdown(f"**Capítulo:** {licao.capitulo_ash_sap}")
-                st.markdown(f"**Data:** {licao.data_conclusao[:10] if licao.data_conclusao else 'N/A'}")
+    # Filtro por trilha
+    trilhas = engine.get_trilhas()
+    trilha_options = ["Todas"] + [t.nome for t in trilhas]
+    filtro = st.selectbox("Filtrar por trilha:", trilha_options)
 
-                if licao.pontos_chave:
-                    st.markdown("**Pontos-Chave:**")
-                    for p in licao.pontos_chave[:5]:
-                        st.markdown(f"• {p}")
+    # Lista de lições
+    for licao in reversed(licoes):
+        trilha = engine.get_trilha(licao.trilha_id)
+        trilha_nome = trilha.nome if trilha else "Desconhecida"
+
+        if filtro != "Todas" and trilha_nome != filtro:
+            continue
+
+        taxa = licao.avaliacao.taxa_acerto if licao.avaliacao else 0
+        icon = "🌟" if taxa >= 85 else "📗" if taxa >= 70 else "📙"
+
+        with st.expander(f"{icon} **Cap. {licao.capitulo_ash_sap}: {licao.titulo}** - {taxa:.0f}%"):
+            st.markdown(f"**Trilha:** {trilha_nome}")
+            st.markdown(f"**Data:** {licao.data_conclusao[:10] if licao.data_conclusao else 'N/A'}")
+
+            # Objetivos
+            if licao.objetivos_aprendizado:
+                st.markdown("**Objetivos de Aprendizado:**")
+                for obj in licao.objetivos_aprendizado:
+                    st.markdown(f"• {obj}")
+
+            # Tópicos
+            if licao.topicos:
+                st.markdown("**Tópicos Abordados:**")
+                for topico in licao.topicos:
+                    st.markdown(f"• **{topico.nome}**")
+                    for sub in topico.subtopicos[:3]:
+                        st.markdown(f"  - {sub}")
+
+            # Pontos-chave
+            if licao.pontos_chave:
+                st.markdown("---")
+                st.markdown('<div class="points-box">', unsafe_allow_html=True)
+                st.markdown("**📌 Pontos-Chave para Memorização:**")
+                for ponto in licao.pontos_chave:
+                    st.markdown(f"• {ponto}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # Resultado do Quiz
+            if licao.avaliacao:
+                st.markdown("---")
+                st.markdown(f"**📝 Quiz:** {licao.avaliacao.questoes_corretas}/{licao.avaliacao.total_questoes} ({licao.avaliacao.taxa_acerto:.0f}%)")
 
 
 def render_importar():
-    st.markdown("## 📥 Importar Lição do Claude")
-    st.markdown("Cole aqui o JSON de uma lição gerada em conversas anteriores.")
+    st.markdown("## 📥 Importar Lições do Claude")
+    st.markdown("""
+    Cole aqui o JSON das suas conversas com o Claude.
 
+    **Formatos aceitos:**
+    - JSON completo (com `licoes_concluidas`)
+    - Lição individual
+    - Lista de lições
+    """)
+    st.markdown("---")
+
+    # Área de texto para o JSON
     json_input = st.text_area(
-        "Cole o JSON da lição:",
-        height=300,
-        placeholder='{"licao_id": "...", "titulo": "...", ...}'
+        "Cole o JSON aqui:",
+        height=400,
+        placeholder='{\n  "licoes_concluidas": [\n    {\n      "licao_id": "licao_1",\n      "titulo": "...",\n      ...\n    }\n  ]\n}'
     )
 
-    if st.button("📥 Importar", type="primary"):
-        try:
-            data = json.loads(json_input)
+    col1, col2 = st.columns(2)
 
-            # Verifica se é uma lição ou lista de lições
-            if "licoes_concluidas" in data:
-                licoes = data["licoes_concluidas"]
-            elif isinstance(data, list):
-                licoes = data
-            else:
-                licoes = [data]
+    with col1:
+        if st.button("📥 Importar", type="primary", use_container_width=True):
+            if not json_input.strip():
+                st.error("❌ Cole um JSON válido!")
+                return
 
-            engine = get_study_engine()
-            count = 0
-            for licao_data in licoes:
-                engine.importar_licao_json(licao_data)
-                count += 1
+            try:
+                data = json.loads(json_input)
+                engine = get_study_engine()
 
-            st.success(f"✅ {count} lição(ões) importada(s) com sucesso!")
+                # Determina o tipo de JSON
+                if "licoes_concluidas" in data:
+                    # JSON completo
+                    count = engine.importar_json_completo(data)
+                    st.success(f"✅ {count} lição(ões) importada(s)!")
+                elif isinstance(data, list):
+                    # Lista de lições
+                    count = 0
+                    for item in data:
+                        engine.importar_licao_json(item)
+                        count += 1
+                    st.success(f"✅ {count} lição(ões) importada(s)!")
+                else:
+                    # Lição individual
+                    engine.importar_licao_json(data)
+                    st.success("✅ Lição importada!")
+
+                st.balloons()
+                st.rerun()
+
+            except json.JSONDecodeError as e:
+                st.error(f"❌ JSON inválido: {e}")
+            except Exception as e:
+                st.error(f"❌ Erro: {e}")
+
+    with col2:
+        if st.button("🗑️ Limpar", use_container_width=True):
             st.rerun()
 
-        except json.JSONDecodeError:
-            st.error("❌ JSON inválido. Verifique o formato.")
-        except Exception as e:
-            st.error(f"❌ Erro: {str(e)}")
+    # Exemplo de formato
+    with st.expander("📋 Ver exemplo de formato JSON"):
+        st.code('''
+{
+  "licoes_concluidas": [
+    {
+      "licao_id": "licao_1",
+      "trilha": "Trilha 9 - Hematologia Consultiva",
+      "capitulo_ash_sap": 1,
+      "titulo": "Manejo Perioperatório em Hematologia",
+      "objetivos_aprendizado": [
+        "Objetivo 1",
+        "Objetivo 2"
+      ],
+      "topicos_abordados": [
+        {
+          "topico": "Nome do Tópico",
+          "subtopicos": ["Sub1", "Sub2"]
+        }
+      ],
+      "pontos_chave_memorizacao": [
+        "Ponto importante 1",
+        "Ponto importante 2"
+      ],
+      "avaliacao": {
+        "total_questoes": 7,
+        "questoes_corretas": 5,
+        "taxa_acerto": 71.4,
+        "questoes": [
+          {
+            "numero": 1,
+            "tema": "Tema da questão",
+            "resposta_aluno": "A",
+            "resposta_correta": "D",
+            "resultado": "incorreta",
+            "conceito_chave": "Conceito avaliado"
+          }
+        ]
+      },
+      "data_conclusao": "2025-12-10"
+    }
+  ]
+}
+        ''', language="json")
+
+
+def render_exportar():
+    st.markdown("## 📤 Exportar Progresso")
+    st.markdown("Exporte seu progresso para backup ou transferência.")
+    st.markdown("---")
+
+    engine = get_study_engine()
+    data = engine.exportar_progresso()
+
+    json_str = json.dumps(data, ensure_ascii=False, indent=2)
+
+    st.text_area("JSON do Progresso:", json_str, height=400)
+
+    st.download_button(
+        label="📥 Baixar JSON",
+        data=json_str,
+        file_name="ash_sap_progresso.json",
+        mime="application/json"
+    )
 
 
 # ============================================
@@ -479,12 +456,12 @@ def main():
         render_dashboard()
     elif page == "trilhas":
         render_trilhas()
-    elif page == "estudar":
-        render_estudar()
-    elif page == "progresso":
-        render_progresso()
+    elif page == "licoes":
+        render_licoes()
     elif page == "importar":
         render_importar()
+    elif page == "exportar":
+        render_exportar()
     else:
         render_dashboard()
 
